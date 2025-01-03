@@ -18,8 +18,6 @@ from ._internal import Wait, _enum, _from_dict, _repeated_dict
 
 _LOG = logging.getLogger('databricks.sdk')
 
-from databricks.sdk.service import oauth2
-
 # all definitions in this file are in alphabetical order
 
 
@@ -713,6 +711,35 @@ class CreateServingEndpoint:
 
 
 @dataclass
+class DataPlaneInfo:
+    authorization_details: Optional[str] = None
+    """Authorization details as a string."""
+
+    endpoint_url: Optional[str] = None
+    """The URL of the endpoint for this operation in the dataplane."""
+
+    def as_dict(self) -> dict:
+        """Serializes the DataPlaneInfo into a dictionary suitable for use as a JSON request body."""
+        body = {}
+        if self.authorization_details is not None: body['authorization_details'] = self.authorization_details
+        if self.endpoint_url is not None: body['endpoint_url'] = self.endpoint_url
+        return body
+
+    def as_shallow_dict(self) -> dict:
+        """Serializes the DataPlaneInfo into a shallow dictionary of its immediate attributes."""
+        body = {}
+        if self.authorization_details is not None: body['authorization_details'] = self.authorization_details
+        if self.endpoint_url is not None: body['endpoint_url'] = self.endpoint_url
+        return body
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, any]) -> DataPlaneInfo:
+        """Deserializes the DataPlaneInfo from a dictionary."""
+        return cls(authorization_details=d.get('authorization_details', None),
+                   endpoint_url=d.get('endpoint_url', None))
+
+
+@dataclass
 class DatabricksModelServingConfig:
     databricks_workspace_url: str
     """The URL of the Databricks workspace containing the model serving endpoint pointed to by this
@@ -1138,6 +1165,45 @@ class ExportMetricsResponse:
         return cls(contents=d.get('contents', None))
 
 
+class ExternalFunctionRequestHttpMethod(Enum):
+
+    DELETE = 'DELETE'
+    GET = 'GET'
+    HEAD = 'HEAD'
+    OPTIONS = 'OPTIONS'
+    PATCH = 'PATCH'
+    POST = 'POST'
+    PUT = 'PUT'
+
+
+@dataclass
+class ExternalFunctionRequestResponse:
+    status_code: Optional[int] = None
+    """The HTTP status code of the response"""
+
+    text: Optional[str] = None
+    """The content of the response"""
+
+    def as_dict(self) -> dict:
+        """Serializes the ExternalFunctionRequestResponse into a dictionary suitable for use as a JSON request body."""
+        body = {}
+        if self.status_code is not None: body['status_code'] = self.status_code
+        if self.text is not None: body['text'] = self.text
+        return body
+
+    def as_shallow_dict(self) -> dict:
+        """Serializes the ExternalFunctionRequestResponse into a shallow dictionary of its immediate attributes."""
+        body = {}
+        if self.status_code is not None: body['status_code'] = self.status_code
+        if self.text is not None: body['text'] = self.text
+        return body
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, any]) -> ExternalFunctionRequestResponse:
+        """Deserializes the ExternalFunctionRequestResponse from a dictionary."""
+        return cls(status_code=d.get('status_code', None), text=d.get('text', None))
+
+
 @dataclass
 class ExternalModel:
     provider: ExternalModelProvider
@@ -1444,7 +1510,7 @@ class ListEndpointsResponse:
 
 @dataclass
 class ModelDataPlaneInfo:
-    query_info: Optional[oauth2.DataPlaneInfo] = None
+    query_info: Optional[DataPlaneInfo] = None
     """Information required to query DataPlane API 'query' endpoint."""
 
     def as_dict(self) -> dict:
@@ -1462,7 +1528,7 @@ class ModelDataPlaneInfo:
     @classmethod
     def from_dict(cls, d: Dict[str, any]) -> ModelDataPlaneInfo:
         """Deserializes the ModelDataPlaneInfo from a dictionary."""
-        return cls(query_info=_from_dict(d, 'query_info', oauth2.DataPlaneInfo))
+        return cls(query_info=_from_dict(d, 'query_info', DataPlaneInfo))
 
 
 @dataclass
@@ -3393,6 +3459,45 @@ class ServingEndpointsAPI:
                            f'/api/2.0/permissions/serving-endpoints/{serving_endpoint_id}',
                            headers=headers)
         return ServingEndpointPermissions.from_dict(res)
+
+    def http_request(self,
+                     connection_name: str,
+                     method: ExternalFunctionRequestHttpMethod,
+                     path: str,
+                     *,
+                     headers: Optional[str] = None,
+                     json: Optional[str] = None,
+                     params: Optional[str] = None) -> ExternalFunctionRequestResponse:
+        """Make external services call using the credentials stored in UC Connection.
+        
+        :param connection_name: str
+          The connection name to use. This is required to identify the external connection.
+        :param method: :class:`ExternalFunctionRequestHttpMethod`
+          The HTTP method to use (e.g., 'GET', 'POST').
+        :param path: str
+          The relative path for the API endpoint. This is required.
+        :param headers: str (optional)
+          Additional headers for the request. If not provided, only auth headers from connections would be
+          passed.
+        :param json: str (optional)
+          The JSON payload to send in the request body.
+        :param params: str (optional)
+          Query parameters for the request.
+        
+        :returns: :class:`ExternalFunctionRequestResponse`
+        """
+
+        query = {}
+        if connection_name is not None: query['connection_name'] = connection_name
+        if headers is not None: query['headers'] = headers
+        if json is not None: query['json'] = json
+        if method is not None: query['method'] = method.value
+        if params is not None: query['params'] = params
+        if path is not None: query['path'] = path
+        headers = {'Accept': 'application/json', }
+
+        res = self._api.do('POST', '/api/2.0/external-function', query=query, headers=headers)
+        return ExternalFunctionRequestResponse.from_dict(res)
 
     def list(self) -> Iterator[ServingEndpoint]:
         """Get all serving endpoints.
